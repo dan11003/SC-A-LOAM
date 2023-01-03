@@ -855,8 +855,8 @@ void process_viz_map(void)
     }
 } // pointcloud_viz
 
-/* Returns created subfolder with timestamp */
 std::string CreateFolder(const std::string& basePath){
+
   auto t = std::time(nullptr);
   auto tm = *std::localtime(&t);
 
@@ -868,12 +868,13 @@ std::string CreateFolder(const std::string& basePath){
   // Format: Mo, 15.06.2009 20:20:00
   std::strftime(buffer, 32, "%a_%Y.%m.%d_%H:%M:%S", ptm);
 
-  std::cout << buffer << std::endl;
-  save_directory = save_directory +"/"+ std::string(buffer) + "/";
-  if (boost::filesystem::create_directory(save_directory)){
+
+  const std::string dir = basePath + "/" + std::string(buffer) + std::string("/");
+  std::cout << dir << std::endl;
+  if (boost::filesystem::create_directory(dir)){
       std::cout << "Created new directory" << "\n";
   }
-  return save_directory;
+  return dir;
 }
 int main(int argc, char **argv)
 {
