@@ -52,10 +52,15 @@
 #include <gtsam/nonlinear/LevenbergMarquardtOptimizer.h>
 #include <gtsam/nonlinear/ISAM2.h>
 
-#include "aloam_velodyne/common.h"
-#include "aloam_velodyne/tic_toc.h"
+#include "sc_aloam_velodyne/common.h"
+#include "sc_aloam_velodyne/tic_toc.h"
 
 #include "scancontext/Scancontext.h"
+#include <boost/filesystem/operations.hpp>
+#include <boost/filesystem/path.hpp>
+#include <ctime>
+
+namespace fs = boost::filesystem;
 
 using namespace gtsam;
 
@@ -287,8 +292,8 @@ void initNoises( void )
     priorNoise = noiseModel::Diagonal::Variances(priorNoiseVector6);
 
     gtsam::Vector odomNoiseVector6(6);
-    // odomNoiseVector6 << 1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4;
-    odomNoiseVector6 << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4;
+     odomNoiseVector6 << 1e-4, 1e-4, 1e-4, 1e-4, 1e-4, 1e-4;
+    //odomNoiseVector6 << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4;
     odomNoise = noiseModel::Diagonal::Variances(odomNoiseVector6);
 
     double loopNoiseScore = 0.5; // constant is ok...
@@ -362,7 +367,7 @@ void pubPath( void )
     // pub odom and path 
     nav_msgs::Odometry odomAftPGO;
     nav_msgs::Path pathAftPGO;
-    pathAftPGO.header.frame_id = "/camera_init";
+    pathAftPGO.header.frame_id = "camera_init";
     mKF.lock(); 
     // for (int node_idx=0; node_idx < int(keyframePosesUpdated.size()) - 1; node_idx++) // -1 is just delayed visualization (because sometimes mutexed while adding(push_back) a new one)
     for (int node_idx=0; node_idx < recentIdxUpdated; node_idx++) // -1 is just delayed visualization (because sometimes mutexed while adding(push_back) a new one)
@@ -371,8 +376,8 @@ void pubPath( void )
         // const gtsam::Pose3& pose_est = isamCurrentEstimate.at<gtsam::Pose3>(node_idx);
 
         nav_msgs::Odometry odomAftPGOthis;
-        odomAftPGOthis.header.frame_id = "/camera_init";
-        odomAftPGOthis.child_frame_id = "/aft_pgo";
+        odomAftPGOthis.header.frame_id = "camera_init";
+        odomAftPGOthis.child_frame_id = "aft_pgo";
         odomAftPGOthis.header.stamp = ros::Time().fromSec(keyframeTimes.at(node_idx));
         odomAftPGOthis.pose.pose.position.x = pose_est.x;
         odomAftPGOthis.pose.pose.position.y = pose_est.y;
@@ -385,7 +390,7 @@ void pubPath( void )
         poseStampAftPGO.pose = odomAftPGOthis.pose.pose;
 
         pathAftPGO.header.stamp = odomAftPGOthis.header.stamp;
-        pathAftPGO.header.frame_id = "/camera_init";
+        pathAftPGO.header.frame_id = "camera_init";
         pathAftPGO.poses.push_back(poseStampAftPGO);
     }
     mKF.unlock(); 
@@ -401,7 +406,7 @@ void pubPath( void )
     q.setY(odomAftPGO.pose.pose.orientation.y);
     q.setZ(odomAftPGO.pose.pose.orientation.z);
     transform.setRotation(q);
-    br.sendTransform(tf::StampedTransform(transform, odomAftPGO.header.stamp, "/camera_init", "/aft_pgo"));
+    br.sendTransform(tf::StampedTransform(transform, odomAftPGO.header.stamp, "camera_init", "aft_pgo"));
 } // pubPath
 
 void updatePoses(void)
@@ -505,12 +510,12 @@ std::optional<gtsam::Pose3> doICPVirtualRelative( int _loop_kf_idx, int _curr_kf
     // loop verification 
     sensor_msgs::PointCloud2 cureKeyframeCloudMsg;
     pcl::toROSMsg(*cureKeyframeCloud, cureKeyframeCloudMsg);
-    cureKeyframeCloudMsg.header.frame_id = "/camera_init";
+    cureKeyframeCloudMsg.header.frame_id = "camera_init";
     pubLoopScanLocal.publish(cureKeyframeCloudMsg);
 
     sensor_msgs::PointCloud2 targetKeyframeCloudMsg;
     pcl::toROSMsg(*targetKeyframeCloud, targetKeyframeCloudMsg);
-    targetKeyframeCloudMsg.header.frame_id = "/camera_init";
+    targetKeyframeCloudMsg.header.frame_id = "camera_init";
     pubLoopSubmapLocal.publish(targetKeyframeCloudMsg);
 
     // ICP Settings
@@ -801,6 +806,13 @@ void process_isam(void)
             saveOptimizedVerticesKITTIformat(isamCurrentEstimate, pgKITTIformat); // pose
             saveOdometryVerticesKITTIformat(odomKITTIformat); // pose
             saveGTSAMgraphG2oFormat(isamCurrentEstimate);
+            pcl::PointCloud<PointType>::Ptr CldGlobal(new pcl::PointCloud<PointType>());
+            for (int node_idx=0; node_idx < recentIdxUpdated; node_idx++) {
+                    *CldGlobal += *local2global(keyframeLaserClouds[node_idx], keyframePosesUpdated[node_idx]);
+            }
+            if(!CldGlobal->points.empty())
+              pcl::io::savePCDFileBinary(save_directory + "global" + ".pcd", *CldGlobal); // scan
+
         }
     }
 }
@@ -827,7 +839,7 @@ void pubMap(void)
 
     sensor_msgs::PointCloud2 laserCloudMapPGOMsg;
     pcl::toROSMsg(*laserCloudMapPGO, laserCloudMapPGOMsg);
-    laserCloudMapPGOMsg.header.frame_id = "/camera_init";
+    laserCloudMapPGOMsg.header.frame_id = "camera_init";
     pubMapAftPGO.publish(laserCloudMapPGOMsg);
 }
 
@@ -843,7 +855,26 @@ void process_viz_map(void)
     }
 } // pointcloud_viz
 
+/* Returns created subfolder with timestamp */
+std::string CreateFolder(const std::string& basePath){
+  auto t = std::time(nullptr);
+  auto tm = *std::localtime(&t);
 
+  //const std::string timeStr(std::put_time(&tm, "%Y-%m-%d_%H-%M"));
+
+  std::time_t now = std::time(NULL);
+  std::tm * ptm = std::localtime(&now);
+  char buffer[32];
+  // Format: Mo, 15.06.2009 20:20:00
+  std::strftime(buffer, 32, "%a_%Y.%m.%d_%H:%M:%S", ptm);
+
+  std::cout << buffer << std::endl;
+  save_directory = save_directory +"/"+ std::string(buffer) + "/";
+  if (boost::filesystem::create_directory(save_directory)){
+      std::cout << "Created new directory" << "\n";
+  }
+  return save_directory;
+}
 int main(int argc, char **argv)
 {
 	ros::init(argc, argv, "laserPGO");
@@ -851,6 +882,8 @@ int main(int argc, char **argv)
 
     // save directories 
 	nh.param<std::string>("save_directory", save_directory, "/"); // pose assignment every k m move 
+  save_directory = CreateFolder(save_directory);
+
 
     pgKITTIformat = save_directory + "optimized_poses.txt";
     odomKITTIformat = save_directory + "odom_poses.txt";

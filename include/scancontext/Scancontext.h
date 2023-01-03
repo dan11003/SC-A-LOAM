@@ -24,7 +24,7 @@
 
 #include "scancontext/nanoflann.hpp"
 #include "scancontext/KDTreeVectorOfVectorsAdaptor.h"
-#include "aloam_velodyne/tic_toc.h"
+#include "sc_aloam_velodyne/tic_toc.h"
 
 using namespace Eigen;
 using namespace nanoflann;
