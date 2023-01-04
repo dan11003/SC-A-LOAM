@@ -871,7 +871,7 @@ std::string CreateFolder(const std::string& basePath){
 
   const std::string dir = basePath + "/" + std::string(buffer) + std::string("/");
   std::cout << dir << std::endl;
-  if (boost::filesystem::create_directory(dir)){
+  if (boost::filesystem::create_directories(dir)){
       std::cout << "Created new directory" << "\n";
   }
   return dir;
